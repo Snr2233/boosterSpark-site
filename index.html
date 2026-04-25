@@ -42,6 +42,10 @@
         .quick-qty-btn:active {
             transform: scale(0.95);
         }
+        /* Hidden admin trigger - no visible indicator */
+        .admin-trigger {
+            cursor: pointer;
+        }
     </style>
 </head>
 <body class="font-sans antialiased">
@@ -49,7 +53,7 @@
 <!-- SIDEBAR OVERLAY -->
 <div id="sidebar-overlay" class="fixed inset-0 bg-black/60 z-40 hidden backdrop-blur-sm transition-opacity" onclick="toggleMenu()"></div>
 
-<!-- SIDEBAR MENU -->
+<!-- SIDEBAR MENU - Admin panel link removed (hidden now) -->
 <div id="sidebar" class="fixed top-0 left-0 w-64 h-full bg-slate-900 z-50 transform -translate-x-full transition-transform duration-300 ease-in-out border-r border-slate-800 shadow-2xl">
     <div class="p-6">
         <div class="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500 mb-8 flex items-center justify-between">
@@ -78,6 +82,7 @@
             <div class="bg-slate-800/60 rounded-xl p-3 text-xs">
                 <div class="flex items-center gap-2"><i class="fa-regular fa-user text-purple-400"></i> <span id="sidebar-username">Spark User</span></div>
                 <div class="flex items-center gap-2 mt-1"><i class="fa-regular fa-credit-card text-green-400"></i> <span id="sidebar-balance">0.00 GHS</span></div>
+                <div class="flex items-center gap-2 mt-1"><i class="fa-regular fa-id-card text-blue-400"></i> <span id="sidebar-userid" class="text-[10px]"></span></div>
             </div>
         </div>
     </div>
@@ -85,7 +90,8 @@
 
 <!-- TOP NAVIGATION -->
 <nav class="p-5 flex justify-between items-center max-w-md mx-auto">
-    <div class="text-xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500">
+    <!-- Secret admin trigger 1: Click the logo 5 times fast -->
+    <div id="logo-trigger" class="text-xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500 cursor-pointer admin-trigger">
         BOOSTER <span class="italic">SPARK</span>
     </div>
     <div onclick="openDeposit()" class="cursor-pointer active:scale-95 transition-transform flex items-center gap-3">
@@ -174,14 +180,14 @@
     </div>
 </main>
 
-<!-- Deposit Modal - Now every amount selection contacts admin via WhatsApp -->
+<!-- Deposit Modal -->
 <div id="deposit-modal" class="fixed inset-0 bg-black/80 z-[60] hidden flex items-center justify-center p-4 backdrop-blur-md">
     <div class="bg-slate-900 border border-slate-700 w-full max-w-sm rounded-3xl p-6 shadow-2xl relative animate-fade-in">
         <button onclick="closeDeposit()" class="absolute top-4 right-4 text-gray-500 hover:text-white">
             <i class="fa-solid fa-xmark text-xl"></i>
         </button>
         <h3 class="text-xl font-bold mb-1">💰 Add Funds</h3>
-        <p class="text-gray-400 text-xs mb-5">Select amount to contact admin via WhatsApp for payment instructions.</p>
+        <p class="text-gray-400 text-xs mb-5">Select amount to contact admin via WhatsApp for payment.</p>
         
         <div class="mb-4">
             <label class="text-xs font-semibold text-gray-400">Select Amount (GHS)</label>
@@ -204,7 +210,45 @@
         </div>
 
         <div class="mt-2 text-[11px] text-center text-gray-500 border-t border-slate-800 pt-3">
-            <i class="fa-brands fa-whatsapp text-green-500"></i> You'll be redirected to WhatsApp to complete payment
+            <i class="fa-regular fa-id-card"></i> <span id="modal-userid-display"></span>
+        </div>
+    </div>
+</div>
+
+<!-- ADMIN PANEL MODAL - Hidden from regular users -->
+<div id="admin-modal" class="fixed inset-0 bg-black/90 z-[70] hidden flex items-center justify-center p-4 backdrop-blur-md">
+    <div class="bg-slate-900 border border-yellow-500/30 w-full max-w-md rounded-3xl p-6 shadow-2xl relative animate-fade-in">
+        <button onclick="closeAdminPanel()" class="absolute top-4 right-4 text-gray-500 hover:text-white">
+            <i class="fa-solid fa-xmark text-xl"></i>
+        </button>
+        <h3 class="text-xl font-bold mb-1 flex items-center gap-2"><i class="fa-solid fa-shield-haltered text-yellow-500"></i> Admin Panel</h3>
+        <p class="text-gray-400 text-xs mb-5">Add funds to users by their User ID</p>
+        
+        <div class="mb-4">
+            <label class="text-xs font-semibold text-gray-400">User ID</label>
+            <input type="text" id="admin-user-id" placeholder="Enter User ID (e.g., USER_ABC123)" class="w-full mt-1 bg-slate-800 border border-slate-600 rounded-xl p-3 text-sm outline-none focus:border-yellow-500">
+        </div>
+        
+        <div class="mb-4">
+            <label class="text-xs font-semibold text-gray-400">Amount to Add (GHS)</label>
+            <input type="number" id="admin-amount" placeholder="Enter amount" class="w-full mt-1 bg-slate-800 border border-slate-600 rounded-xl p-3 text-sm outline-none focus:border-yellow-500">
+        </div>
+        
+        <button onclick="adminAddFunds()" class="w-full bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-500 hover:to-amber-500 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition">
+            <i class="fa-solid fa-plus-circle"></i> Add Funds to User
+        </button>
+        
+        <div class="mt-4 p-3 bg-slate-800/50 rounded-xl">
+            <p class="text-[11px] text-gray-400 text-center">
+                <i class="fa-solid fa-database"></i> Users' balances are stored in their browser localStorage.<br>
+                <span class="text-yellow-500">Note:</span> Works for users who have visited the site before.
+            </p>
+        </div>
+        
+        <div class="mt-3">
+            <button onclick="exportUserData()" class="w-full text-xs bg-slate-800 hover:bg-slate-700 py-2 rounded-lg transition">
+                <i class="fa-solid fa-download"></i> Export All User Data (JSON)
+            </button>
         </div>
     </div>
 </div>
@@ -215,8 +259,15 @@
 
 <script>
     // ---------- APP STATE ----------
-    let userBalance = 0.00;
-    const BASE_PRICE_PER_100 = 7.00;
+    // Get or create user ID
+    let userId = localStorage.getItem('boosterUserId');
+    if (!userId) {
+        userId = 'USER_' + Math.random().toString(36).substr(2, 8).toUpperCase();
+        localStorage.setItem('boosterUserId', userId);
+    }
+    
+    // Load user balance from localStorage
+    let userBalance = parseFloat(localStorage.getItem(`balance_${userId}`)) || 0.00;
     
     const ratePer100Map = {
         tiktok: 7.00,
@@ -242,64 +293,34 @@
     const linkLabel = document.getElementById('link-label');
     const targetLinkInput = document.getElementById('target-link');
     
-    // Admin WhatsApp number (same as before)
     const ADMIN_PHONE = "233240058049";
+    const ADMIN_PASSWORD = "admin123"; // Change this to your desired password
     
-    // Function to contact admin for deposit (opens WhatsApp with payment request)
-    window.contactAdminForDeposit = function(amount) {
-        if (!amount || amount <= 0) {
-            alert("Please select a valid amount");
-            return;
-        }
-        
-        const message = `💰 *FUNDING REQUEST - BOOSTER SPARK* 💰%0A%0A` +
-                        `Hello Admin, I would like to add funds to my Booster Spark account.%0A%0A` +
-                        `💵 *Amount:* ${amount} GHS%0A` +
-                        `👤 *Username:* Spark User%0A` +
-                        `📱 *Platform:* Web App%0A%0A` +
-                        `Please provide payment details (MoMo/Card) so I can complete the deposit.%0A%0A` +
-                        `_Waiting for instructions._`;
-        
-        const whatsappUrl = `https://wa.me/${ADMIN_PHONE}?text=${message}`;
-        window.open(whatsappUrl, '_blank');
-        closeDeposit();
-    };
+    // Secret admin trigger variables
+    let logoClickCount = 0;
+    let logoClickTimer = null;
+    let footerClickCount = 0;
+    let footerClickTimer = null;
     
-    // Contact admin with custom amount
-    window.contactAdminWithCustomAmount = function() {
-        const customInput = document.getElementById('customDepositAmount');
-        let amount = parseFloat(customInput.value);
-        
-        if (isNaN(amount) || amount <= 0) {
-            alert("❌ Please enter a valid amount (minimum 1 GHS)");
-            return;
-        }
-        
-        if (amount > 10000) {
-            if (!confirm("Large amount detected. Continue to contact admin?")) return;
-        }
-        
-        const message = `💰 *FUNDING REQUEST - BOOSTER SPARK* 💰%0A%0A` +
-                        `Hello Admin, I would like to add funds to my Booster Spark account.%0A%0A` +
-                        `💵 *Amount:* ${amount} GHS (Custom)%0A` +
-                        `👤 *Username:* Spark User%0A` +
-                        `📱 *Platform:* Web App%0A%0A` +
-                        `Please provide payment details so I can complete the deposit.%0A%0A` +
-                        `_Waiting for instructions._`;
-        
-        const whatsappUrl = `https://wa.me/${ADMIN_PHONE}?text=${message}`;
-        window.open(whatsappUrl, '_blank');
-        closeDeposit();
-        customInput.value = '';
-    };
+    // Save balance to localStorage
+    function saveBalance() {
+        localStorage.setItem(`balance_${userId}`, userBalance.toString());
+    }
     
-    // Update balance display
+    // Update all balance displays
     function refreshBalanceUI() {
         const formatted = userBalance.toFixed(2) + " GHS";
         const navBalance = document.getElementById('balance-display-nav');
         if (navBalance) navBalance.innerText = formatted;
         const sidebarBalance = document.getElementById('sidebar-balance');
         if (sidebarBalance) sidebarBalance.innerText = formatted;
+        
+        // Update user ID displays
+        const sidebarUserId = document.getElementById('sidebar-userid');
+        if (sidebarUserId) sidebarUserId.innerText = `ID: ${userId}`;
+        
+        const modalUserIdDisplay = document.getElementById('modal-userid-display');
+        if (modalUserIdDisplay) modalUserIdDisplay.innerHTML = `<i class="fa-regular fa-id-card"></i> Your ID: ${userId}`;
     }
     
     // Calculate price based on quantity (per 100 units)
@@ -370,9 +391,193 @@
         updatePrice();
     };
     
+    // SECRET ADMIN TRIGGER METHODS
+    
+    // Method 1: Click logo 5 times quickly
+    function triggerLogoClick() {
+        logoClickCount++;
+        
+        if (logoClickTimer) clearTimeout(logoClickTimer);
+        
+        if (logoClickCount >= 5) {
+            logoClickCount = 0;
+            openAdminPanel();
+        }
+        
+        logoClickTimer = setTimeout(() => {
+            logoClickCount = 0;
+        }, 800);
+    }
+    
+    // Method 2: Triple tap on footer
+    function triggerFooterClick() {
+        footerClickCount++;
+        
+        if (footerClickTimer) clearTimeout(footerClickTimer);
+        
+        if (footerClickCount >= 3) {
+            footerClickCount = 0;
+            openAdminPanel();
+        }
+        
+        footerClickTimer = setTimeout(() => {
+            footerClickCount = 0;
+        }, 600);
+    }
+    
+    // Method 3: Keyboard shortcut (press 'A' then 'D' then 'M' then 'I' then 'N')
+    let keySequence = [];
+    const secretCode = ['a', 'd', 'm', 'i', 'n'];
+    
+    document.addEventListener('keydown', function(e) {
+        keySequence.push(e.key.toLowerCase());
+        if (keySequence.length > secretCode.length) {
+            keySequence.shift();
+        }
+        
+        let match = true;
+        for (let i = 0; i < keySequence.length; i++) {
+            if (keySequence[i] !== secretCode[i]) {
+                match = false;
+                break;
+            }
+        }
+        
+        if (match && keySequence.length === secretCode.length) {
+            keySequence = [];
+            openAdminPanel();
+        }
+    });
+    
+    // Attach secret triggers to DOM elements
+    document.addEventListener('DOMContentLoaded', function() {
+        const logo = document.getElementById('logo-trigger');
+        if (logo) {
+            logo.addEventListener('click', triggerLogoClick);
+        }
+        
+        const footer = document.querySelector('footer');
+        if (footer) {
+            footer.addEventListener('click', triggerFooterClick);
+        }
+    });
+    
+    // Contact admin for deposit (includes User ID)
+    window.contactAdminForDeposit = function(amount) {
+        if (!amount || amount <= 0) {
+            alert("Please select a valid amount");
+            return;
+        }
+        
+        const message = `💰 *FUNDING REQUEST - BOOSTER SPARK* 💰%0A%0A` +
+                        `Hello Admin, I would like to add funds to my Booster Spark account.%0A%0A` +
+                        `💵 *Amount:* ${amount} GHS%0A` +
+                        `🆔 *User ID:* ${userId}%0A` +
+                        `👤 *Username:* Spark User%0A` +
+                        `📱 *Platform:* Web App%0A%0A` +
+                        `Please add funds to this User ID after confirming payment.%0A%0A` +
+                        `_Waiting for payment instructions._`;
+        
+        const whatsappUrl = `https://wa.me/${ADMIN_PHONE}?text=${message}`;
+        window.open(whatsappUrl, '_blank');
+        closeDeposit();
+    };
+    
+    // Contact admin with custom amount
+    window.contactAdminWithCustomAmount = function() {
+        const customInput = document.getElementById('customDepositAmount');
+        let amount = parseFloat(customInput.value);
+        
+        if (isNaN(amount) || amount <= 0) {
+            alert("❌ Please enter a valid amount (minimum 1 GHS)");
+            return;
+        }
+        
+        const message = `💰 *FUNDING REQUEST - BOOSTER SPARK* 💰%0A%0A` +
+                        `Hello Admin, I would like to add funds to my Booster Spark account.%0A%0A` +
+                        `💵 *Amount:* ${amount} GHS (Custom)%0A` +
+                        `🆔 *User ID:* ${userId}%0A` +
+                        `👤 *Username:* Spark User%0A` +
+                        `📱 *Platform:* Web App%0A%0A` +
+                        `Please add funds to this User ID after confirming payment.%0A%0A` +
+                        `_Waiting for instructions._`;
+        
+        const whatsappUrl = `https://wa.me/${ADMIN_PHONE}?text=${message}`;
+        window.open(whatsappUrl, '_blank');
+        closeDeposit();
+        customInput.value = '';
+    };
+    
+    // Admin functions (now triggered secretly)
+    window.openAdminPanel = function() {
+        const password = prompt("🔐 Enter admin password:");
+        if (password === ADMIN_PASSWORD) {
+            document.getElementById('admin-modal').classList.remove('hidden');
+        } else if (password !== null) {
+            alert("❌ Incorrect password!");
+        }
+    };
+    
+    window.closeAdminPanel = function() {
+        document.getElementById('admin-modal').classList.add('hidden');
+    };
+    
+    window.adminAddFunds = function() {
+        const targetUserId = document.getElementById('admin-user-id').value.trim();
+        const amount = parseFloat(document.getElementById('admin-amount').value);
+        
+        if (!targetUserId) {
+            alert("❌ Please enter a User ID");
+            return;
+        }
+        
+        if (isNaN(amount) || amount <= 0) {
+            alert("❌ Please enter a valid amount");
+            return;
+        }
+        
+        // Get current balance for that user
+        let currentBalance = parseFloat(localStorage.getItem(`balance_${targetUserId}`)) || 0;
+        let newBalance = currentBalance + amount;
+        localStorage.setItem(`balance_${targetUserId}`, newBalance.toString());
+        
+        alert(`✅ Success!\n\nUser ID: ${targetUserId}\nAmount Added: ${amount} GHS\nNew Balance: ${newBalance.toFixed(2)} GHS`);
+        
+        // If this is the current user, refresh their balance
+        if (targetUserId === userId) {
+            userBalance = newBalance;
+            refreshBalanceUI();
+            saveBalance();
+        }
+        
+        // Clear inputs
+        document.getElementById('admin-user-id').value = '';
+        document.getElementById('admin-amount').value = '';
+    };
+    
+    window.exportUserData = function() {
+        const allData = {};
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key.startsWith('balance_')) {
+                allData[key] = localStorage.getItem(key);
+            }
+        }
+        const dataStr = JSON.stringify(allData, null, 2);
+        const dataBlob = new Blob([dataStr], {type: 'application/json'});
+        const url = URL.createObjectURL(dataBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `booster_users_${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        alert("✅ User data exported!");
+    };
+    
     // Deposit modal controls
     window.openDeposit = function() {
         document.getElementById('deposit-modal').classList.remove('hidden');
+        refreshBalanceUI();
     };
     
     window.closeDeposit = function() {
@@ -410,6 +615,7 @@
         }
         
         userBalance -= totalCost;
+        saveBalance();
         refreshBalanceUI();
         
         const platformDisplay = currentPlatform.charAt(0).toUpperCase() + currentPlatform.slice(1);
@@ -422,6 +628,7 @@
                         `💰 *Rate:* ${pricePer100Text}%0A` +
                         `💵 *Total Cost:* ${totalCost.toFixed(2)} GHS%0A` +
                         `🔗 *Target Link:* ${link}%0A` +
+                        `🆔 *User ID:* ${userId}%0A` +
                         `💳 *Remaining Balance:* ${userBalance.toFixed(2)} GHS%0A%0A` +
                         `✅ _Order confirmed. Please process delivery._`;
         
@@ -434,7 +641,7 @@
         window.open(whatsappUrl, '_blank');
     };
     
-    // Sidebar actions
+    // Sidebar actions (Admin panel removed from sidebar now)
     window.handleSidebarAction = function(action) {
         switch(action) {
             case 'dashboard':
@@ -452,6 +659,7 @@
             case 'logout':
                 if(confirm("Logout from Booster Spark? Your balance will reset.")) {
                     userBalance = 0;
+                    saveBalance();
                     refreshBalanceUI();
                     alert("Logged out successfully.");
                 }
@@ -494,4 +702,4 @@
     refreshBalanceUI();
 </script>
 </body>
-</html>
+    </html>
