@@ -174,7 +174,6 @@
         </button>
     </div>
 
-    <!-- trust badges -->
     <div class="mt-6 p-4 text-center bg-slate-800/30 rounded-2xl">
         <p class="text-xs text-gray-400 flex items-center justify-center gap-3 flex-wrap">
             <span><i class="fa-solid fa-shield-alt text-green-400"></i> Secure Checkout</span>
@@ -219,7 +218,7 @@
     </div>
 </div>
 
-<!-- ADMIN PANEL MODAL - With Claim Link System -->
+<!-- ADMIN PANEL MODAL -->
 <div id="admin-modal" class="fixed inset-0 bg-black/90 z-[70] hidden flex items-center justify-center p-4 backdrop-blur-md overflow-y-auto">
     <div class="bg-slate-900 border border-yellow-500/30 w-full max-w-2xl rounded-3xl p-6 shadow-2xl relative animate-fade-in my-8">
         <button onclick="closeAdminPanel()" class="absolute top-4 right-4 text-gray-500 hover:text-white">
@@ -229,7 +228,6 @@
         <h3 class="text-xl font-bold mb-1 flex items-center gap-2"><i class="fa-solid fa-shield-haltered text-yellow-500"></i> Admin Panel</h3>
         <p class="text-gray-400 text-xs mb-5">Add funds - User will get a link to claim</p>
         
-        <!-- Tabs -->
         <div class="flex gap-2 border-b border-slate-700 mb-4">
             <button onclick="switchAdminTab('add')" id="tab-add" class="px-4 py-2 text-sm font-medium text-yellow-500 border-b-2 border-yellow-500 transition">Add Funds</button>
             <button onclick="switchAdminTab('pending')" id="tab-pending" class="px-4 py-2 text-sm font-medium text-gray-400 hover:text-yellow-400 transition">Pending Claims</button>
@@ -295,6 +293,10 @@
 </footer>
 
 <script>
+    // ---------- FIXED WHATSAPP NUMBER ----------
+    const ADMIN_PHONE = "233240058049"; // Your WhatsApp number (without + or spaces)
+    const ADMIN_PASSWORD = "admin123";
+    
     // ---------- APP STATE ----------
     let userId = localStorage.getItem('boosterUserId');
     if (!userId) {
@@ -311,12 +313,10 @@
         
         if (claimCode) {
             claimFunds(claimCode);
-            // Remove claim param from URL without reloading
             window.history.replaceState({}, document.title, window.location.pathname);
         }
     }
     
-    // Claim funds from a link
     function claimFunds(claimCode) {
         const claims = JSON.parse(localStorage.getItem('pending_claims') || '{}');
         const claim = claims[claimCode];
@@ -326,7 +326,6 @@
             return;
         }
         
-        // Check if expired (24 hours)
         if (Date.now() - claim.timestamp > 24 * 60 * 60 * 1000) {
             delete claims[claimCode];
             localStorage.setItem('pending_claims', JSON.stringify(claims));
@@ -334,24 +333,20 @@
             return;
         }
         
-        // Check if this claim is for this user
         if (claim.userId !== userId) {
-            showToast(`❌ This link is for user ${claim.userId}. You are ${userId}. Please log in with the correct account.`);
+            showToast(`❌ This link is for user ${claim.userId}. You are ${userId}.`);
             return;
         }
         
-        // Add funds
         userBalance += claim.amount;
         saveBalance();
         refreshBalanceUI();
         
-        // Remove used claim
         delete claims[claimCode];
         localStorage.setItem('pending_claims', JSON.stringify(claims));
         
         showToast(`✅ ${claim.amount} GHS added to your balance! New balance: ${userBalance.toFixed(2)} GHS`);
         
-        // Also notify admin that claim was used (optional)
         setTimeout(() => {
             alert(`🎉 Funds added!\nYour new balance is ${userBalance.toFixed(2)} GHS`);
         }, 500);
@@ -365,17 +360,11 @@
         setTimeout(() => toast.remove(), 3000);
     }
     
-    // Save balance
     function saveBalance() {
         localStorage.setItem(`balance_${userId}`, userBalance.toString());
-        // Also register this user
         let users = JSON.parse(localStorage.getItem('booster_all_users') || '{}');
         if (!users[userId]) {
-            users[userId] = {
-                id: userId,
-                firstSeen: new Date().toISOString(),
-                lastSeen: new Date().toISOString()
-            };
+            users[userId] = { id: userId, firstSeen: new Date().toISOString(), lastSeen: new Date().toISOString() };
         } else {
             users[userId].lastSeen = new Date().toISOString();
         }
@@ -398,9 +387,6 @@
     const serviceSelect = document.getElementById('service-select');
     const linkLabel = document.getElementById('link-label');
     const targetLinkInput = document.getElementById('target-link');
-    
-    const ADMIN_PHONE = "233240058049";
-    const ADMIN_PASSWORD = "admin123";
     
     let logoClickCount = 0, logoClickTimer = null, footerClickCount = 0, footerClickTimer = null;
     
@@ -452,12 +438,7 @@
         });
         let labelText = platform === 'tiktok' ? "TikTok Video / Profile Link" : platform === 'instagram' ? "Instagram Username / Post Link" : platform === 'facebook' ? "Facebook Page / Post URL" : "YouTube Video / Channel Link";
         linkLabel.innerText = labelText;
-        const placeholders = {
-            tiktok: "https://www.tiktok.com/@user/video/123...",
-            instagram: "https://instagram.com/p/... or @username",
-            facebook: "https://facebook.com/...",
-            youtube: "https://youtube.com/watch?v=..."
-        };
+        const placeholders = { tiktok: "https://www.tiktok.com/@user/video/123...", instagram: "https://instagram.com/p/... or @username", facebook: "https://facebook.com/...", youtube: "https://youtube.com/watch?v=..." };
         targetLinkInput.placeholder = placeholders[platform];
         const optionsArray = serviceOptions[platform];
         serviceSelect.innerHTML = '';
@@ -470,7 +451,7 @@
         updatePrice();
     };
     
-    // Admin functions - CLAIM LINK SYSTEM
+    // Admin functions
     window.switchAdminTab = function(tab) {
         const addTab = document.getElementById('tab-add');
         const pendingTab = document.getElementById('tab-pending');
@@ -511,22 +492,12 @@
         if (!targetUserId) { alert("❌ Please enter a User ID"); return; }
         if (isNaN(amount) || amount <= 0) { alert("❌ Please enter a valid amount"); return; }
         
-        // Generate unique claim code
         const claimCode = Math.random().toString(36).substr(2, 16).toUpperCase();
-        
-        // Store pending claim
         const claims = JSON.parse(localStorage.getItem('pending_claims') || '{}');
-        claims[claimCode] = {
-            userId: targetUserId,
-            amount: amount,
-            timestamp: Date.now()
-        };
+        claims[claimCode] = { userId: targetUserId, amount: amount, timestamp: Date.now() };
         localStorage.setItem('pending_claims', JSON.stringify(claims));
         
-        // Generate claim link
         const claimLink = `${window.location.origin}${window.location.pathname}?claim=${claimCode}`;
-        
-        // Create WhatsApp message
         const waMessage = `🎉 *FUNDS READY TO CLAIM!* 🎉%0A%0A` +
                           `Hello! Your funds of *${amount} GHS* are ready.%0A%0A` +
                           `👇 *Click this link to claim:*%0A` +
@@ -534,11 +505,10 @@
                           `The link expires in 24 hours. Once you click it, the funds will be added to your Booster Spark account instantly!%0A%0A` +
                           `Thank you for using Booster Spark! 🚀`;
         
-        const whatsappUrl = `https://wa.me/${targetUserId.replace('USER_', '')}?text=${waMessage}`;
+        // FIXED: Proper WhatsApp URL format
+        const whatsappUrl = `https://wa.me/${ADMIN_PHONE}?text=${waMessage}`;
         
-        // Copy link to clipboard as well
         navigator.clipboard.writeText(claimLink);
-        
         alert(`✅ Claim link generated!\n\nAmount: ${amount} GHS\nUser ID: ${targetUserId}\n\nLink copied to clipboard!\n\nClick OK to open WhatsApp and send to user.`);
         
         window.open(whatsappUrl, '_blank');
@@ -613,7 +583,7 @@
                         <td class="p-2 text-center">
                             <button onclick="quickSelectUser('${user.id}')" class="text-[10px] bg-purple-600/50 hover:bg-purple-600 px-2 py-1 rounded transition">Add Funds</button>
                         </td>
-                      </tr>`;
+                       </tr>`;
         });
         html += '</tbody></table>';
         container.innerHTML = html;
@@ -677,6 +647,7 @@
     window.openDeposit = function() { document.getElementById('deposit-modal').classList.remove('hidden'); refreshBalanceUI(); };
     window.closeDeposit = function() { document.getElementById('deposit-modal').classList.add('hidden'); };
     
+    // FIXED: Purchase button - sends COMPLETE order details to YOUR WhatsApp
     window.processPurchaseFlow = async function() {
         const btn = document.getElementById('purchaseSparkBtn');
         const originalHTML = btn.innerHTML;
@@ -685,33 +656,62 @@
         await new Promise(r => setTimeout(r, 400));
         
         const link = targetLinkInput.value.trim();
-        if (!link) { alert("⚠️ Please enter a valid link"); btn.innerHTML = originalHTML; btn.disabled = false; return; }
+        if (!link) { 
+            alert("⚠️ Please enter a valid profile/video link"); 
+            btn.innerHTML = originalHTML; 
+            btn.disabled = false; 
+            return; 
+        }
         
         let qty = parseInt(qtyInput.value) || 100;
         if (qty < 100) qty = 100;
+        if (qty > 100000) qty = 100000;
         const totalCost = calculatePrice(qty, currentRatePer100);
         
         if (userBalance < totalCost) {
-            alert(`❌ Insufficient Balance! Needed: ${totalCost.toFixed(2)} GHS | Your balance: ${userBalance.toFixed(2)} GHS`);
-            btn.innerHTML = originalHTML; btn.disabled = false; openDeposit(); return;
+            alert(`❌ Insufficient Balance!\nNeeded: ${totalCost.toFixed(2)} GHS\nYour balance: ${userBalance.toFixed(2)} GHS\n\nPlease add funds first.`);
+            btn.innerHTML = originalHTML; 
+            btn.disabled = false; 
+            openDeposit(); 
+            return;
         }
         
+        // Deduct balance
         userBalance -= totalCost;
         saveBalance();
         refreshBalanceUI();
         
-        const message = `🚀 *NEW ORDER* 🔥%0A%0APlatform: ${currentPlatform}%0AService: ${serviceSelect.options[serviceSelect.selectedIndex]?.text}%0AQty: ${qty}%0ATotal: ${totalCost.toFixed(2)} GHS%0ALink: ${link}%0AUser ID: ${userId}`;
+        const platformDisplay = currentPlatform.charAt(0).toUpperCase() + currentPlatform.slice(1);
+        const selectedService = serviceSelect.options[serviceSelect.selectedIndex]?.text || "Standard";
+        
+        // FIXED: Complete order message with ALL details
+        const orderMessage = `🚀 *NEW BOOSTER SPARK ORDER* 🔥%0A%0A` +
+                            `📱 *Platform:* ${platformDisplay}%0A` +
+                            `⚙️ *Service:* ${selectedService}%0A` +
+                            `🔢 *Quantity:* ${qty.toLocaleString()}%0A` +
+                            `💰 *Rate:* ${currentRatePer100.toFixed(2)} GHS per 100%0A` +
+                            `💵 *Total Cost:* ${totalCost.toFixed(2)} GHS%0A` +
+                            `🔗 *Target Link:* ${link}%0A` +
+                            `🆔 *User ID:* ${userId}%0A` +
+                            `💳 *Remaining Balance:* ${userBalance.toFixed(2)} GHS%0A%0A` +
+                            `✅ _Order confirmed. Please process delivery._`;
+        
+        // FIXED: Correct WhatsApp URL for YOUR number
+        const whatsappUrl = `https://wa.me/${ADMIN_PHONE}?text=${orderMessage}`;
         
         btn.innerHTML = originalHTML;
         btn.disabled = false;
-        alert(`✨ Order placed! ${totalCost.toFixed(2)} GHS deducted. Remaining: ${userBalance.toFixed(2)} GHS`);
-        window.open(`https://wa.me/${ADMIN_PHONE}?text=${message}`, '_blank');
+        
+        alert(`✅ ORDER PLACED SUCCESSFULLY!\n\n📊 Quantity: ${qty.toLocaleString()}\n💰 Total: ${totalCost.toFixed(2)} GHS\n💎 Remaining Balance: ${userBalance.toFixed(2)} GHS\n\n📱 Redirecting to WhatsApp...`);
+        
+        // Open WhatsApp with your number
+        window.open(whatsappUrl, '_blank');
     };
     
     window.handleSidebarAction = function(action) {
         switch(action) {
             case 'dashboard': alert("✨ Dashboard coming soon!"); break;
-            case 'services': alert("📦 Services on main screen."); break;
+            case 'services': alert("📦 Services available on main screen."); break;
             case 'order-history': alert("📋 Contact WhatsApp for order history."); break;
             case 'add-funds': openDeposit(); break;
             case 'logout':
@@ -751,4 +751,4 @@
     refreshBalanceUI();
 </script>
 </body>
-    </html>
+                </html>
