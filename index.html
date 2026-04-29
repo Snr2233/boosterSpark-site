@@ -60,6 +60,12 @@
             border-radius: 50%;
             animation: spin 0.6s linear infinite;
         }
+        .claim-btn {
+            transition: all 0.2s;
+        }
+        .claim-btn:active {
+            transform: scale(0.98);
+        }
     </style>
 </head>
 <body class="font-sans antialiased">
@@ -308,7 +314,7 @@
         
         <div class="mb-4">
             <label class="text-xs font-semibold text-gray-400">Claim Code</label>
-            <input type="text" id="claim-code-input" placeholder="e.g., ABC123XYZ" class="w-full mt-1 bg-slate-800 border border-slate-600 rounded-xl p-4 text-sm outline-none focus:border-green-500 text-center font-mono text-lg tracking-wider">
+            <input type="text" id="claim-code-input" placeholder="e.g., A7B3K9" class="w-full mt-1 bg-slate-800 border border-slate-600 rounded-xl p-4 text-sm outline-none focus:border-green-500 text-center font-mono text-lg tracking-wider uppercase">
         </div>
         
         <button onclick="claimWithCode()" class="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition">
@@ -321,9 +327,18 @@
     </div>
 </div>
 
+<!-- FOOTER WITH VISIBLE CLAIM BUTTON -->
 <footer class="w-full text-center py-5 text-gray-500 text-xs border-t border-slate-800">
+    <!-- CLAIM CODE BUTTON - VISIBLE AND EASY TO FIND -->
+    <div class="mb-4 pb-3 border-b border-slate-700/50">
+        <button onclick="openClaimModal()" 
+                class="claim-btn bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold py-3 px-6 rounded-xl transition transform hover:scale-105 shadow-lg shadow-green-500/30 w-full max-w-xs mx-auto block">
+            <i class="fa-solid fa-gift mr-2"></i> 🎁 HAVE A CLAIM CODE? CLICK HERE
+        </button>
+        <p class="text-[10px] text-gray-500 mt-2">Enter your claim code to add funds to your account instantly</p>
+    </div>
+    
     Developed by <strong class="text-purple-400">WISETECH SOLUTIONS</strong> | © 2025 Booster Spark
-    <button onclick="openClaimModal()" class="block w-full text-center text-[10px] text-green-500/50 mt-1">Have a claim code? Click here</button>
 </footer>
 
 <script>
@@ -341,8 +356,6 @@
     let userBalance = parseFloat(localStorage.getItem(`balance_${userId}`)) || 0.00;
     
     // ---------- CLAIM SYSTEM (Works across devices!) ----------
-    // Claims are stored in localStorage but SHARED via CODE that user enters manually
-    
     function saveBalance() {
         localStorage.setItem(`balance_${userId}`, userBalance.toString());
         let users = JSON.parse(localStorage.getItem('booster_all_users') || '{}');
@@ -354,7 +367,7 @@
         localStorage.setItem('booster_all_users', JSON.stringify(users));
     }
     
-    // Create a claim (stores in admin's localStorage)
+    // Create a claim
     window.createClaim = function() {
         const targetUserId = document.getElementById('admin-user-id').value.trim();
         const amount = parseFloat(document.getElementById('admin-amount').value);
@@ -382,7 +395,7 @@
                           `📱 *How to claim:*%0A` +
                           `1. Open the Booster Spark app%0A` +
                           `2. Scroll to the bottom of the page%0A` +
-                          `3. Click "Have a claim code? Click here"%0A` +
+                          `3. Click the GREEN "HAVE A CLAIM CODE? CLICK HERE" button%0A` +
                           `4. Enter this code: ${claimCode}%0A%0A` +
                           `The code expires in 24 hours.%0A%0A` +
                           `Thank you for using Booster Spark! 🚀`;
@@ -457,6 +470,8 @@
     
     window.openClaimModal = function() {
         document.getElementById('claim-modal').classList.remove('hidden');
+        document.getElementById('claim-code-input').value = '';
+        document.getElementById('claim-code-input').focus();
     };
     
     window.closeClaimModal = function() {
@@ -654,7 +669,7 @@
                         </td>
                        </tr>`;
         });
-        html += '</tbody><table>';
+        html += '</tbody></table>';
         container.innerHTML = html;
     };
     
@@ -816,4 +831,4 @@
     refreshBalanceUI();
 </script>
 </body>
-</html>
+    </html>
