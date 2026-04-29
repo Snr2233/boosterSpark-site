@@ -51,6 +51,15 @@
             from { bottom: -50px; opacity: 0; }
             to { bottom: 20px; opacity: 1; }
         }
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
     </style>
 </head>
 <body class="font-sans antialiased">
@@ -226,7 +235,7 @@
         </button>
         
         <h3 class="text-xl font-bold mb-1 flex items-center gap-2"><i class="fa-solid fa-shield-haltered text-yellow-500"></i> Admin Panel</h3>
-        <p class="text-gray-400 text-xs mb-5">Add funds - User will get a link to claim</p>
+        <p class="text-gray-400 text-xs mb-5">Add funds - User will get a claim code to enter</p>
         
         <div class="flex gap-2 border-b border-slate-700 mb-4">
             <button onclick="switchAdminTab('add')" id="tab-add" class="px-4 py-2 text-sm font-medium text-yellow-500 border-b-2 border-yellow-500 transition">Add Funds</button>
@@ -246,16 +255,16 @@
                 <input type="number" id="admin-amount" placeholder="Enter amount" class="w-full mt-1 bg-slate-800 border border-slate-600 rounded-xl p-3 text-sm outline-none focus:border-yellow-500">
             </div>
             
-            <button onclick="createClaimLink()" class="w-full bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-500 hover:to-amber-500 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition">
-                <i class="fa-solid fa-link"></i> Generate Claim Link
+            <button onclick="createClaim()" class="w-full bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-500 hover:to-amber-500 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition">
+                <i class="fa-solid fa-link"></i> Generate Claim Code
             </button>
             
             <div class="mt-3 p-3 bg-blue-900/30 rounded-xl text-xs text-gray-300">
                 <i class="fa-solid fa-info-circle text-blue-400"></i> How it works:<br>
                 1. Enter User ID and amount<br>
-                2. Click "Generate Claim Link"<br>
-                3. Send the generated link to the user via WhatsApp<br>
-                4. User clicks the link → funds added to THEIR account instantly!
+                2. Click "Generate Claim Code"<br>
+                3. Send the generated CODE to the user via WhatsApp<br>
+                4. User enters the code in the app → funds added instantly!
             </div>
         </div>
         
@@ -281,20 +290,45 @@
         
         <div class="mt-4 p-3 bg-slate-800/50 rounded-xl">
             <p class="text-[11px] text-gray-400 text-center">
-                <i class="fa-solid fa-database"></i> User balances are stored on each user's device.<br>
-                <span class="text-green-400">✓</span> Use Claim Links to add funds across devices!
+                <i class="fa-solid fa-database"></i> Claims are stored in your browser.<br>
+                <span class="text-yellow-500">⚠️</span> For users on different devices, send them the CODE (not a link).
             </p>
+        </div>
+    </div>
+</div>
+
+<!-- CLAIM CODE MODAL - User enters code to claim funds -->
+<div id="claim-modal" class="fixed inset-0 bg-black/80 z-[65] hidden flex items-center justify-center p-4 backdrop-blur-md">
+    <div class="bg-slate-900 border border-green-500/30 w-full max-w-sm rounded-3xl p-6 shadow-2xl relative animate-fade-in">
+        <button onclick="closeClaimModal()" class="absolute top-4 right-4 text-gray-500 hover:text-white">
+            <i class="fa-solid fa-xmark text-xl"></i>
+        </button>
+        <h3 class="text-xl font-bold mb-1 flex items-center gap-2"><i class="fa-solid fa-gift text-green-500"></i> Claim Funds</h3>
+        <p class="text-gray-400 text-xs mb-5">Enter the claim code you received from admin</p>
+        
+        <div class="mb-4">
+            <label class="text-xs font-semibold text-gray-400">Claim Code</label>
+            <input type="text" id="claim-code-input" placeholder="e.g., ABC123XYZ" class="w-full mt-1 bg-slate-800 border border-slate-600 rounded-xl p-4 text-sm outline-none focus:border-green-500 text-center font-mono text-lg tracking-wider">
+        </div>
+        
+        <button onclick="claimWithCode()" class="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition">
+            <i class="fa-solid fa-check-circle"></i> Claim Funds
+        </button>
+        
+        <div class="mt-3 text-[11px] text-center text-gray-500">
+            Didn't receive a code? <button onclick="closeClaimModal();openDeposit();" class="text-green-400">Contact Admin</button>
         </div>
     </div>
 </div>
 
 <footer class="w-full text-center py-5 text-gray-500 text-xs border-t border-slate-800">
     Developed by <strong class="text-purple-400">WISETECH SOLUTIONS</strong> | © 2025 Booster Spark
+    <button onclick="openClaimModal()" class="block w-full text-center text-[10px] text-green-500/50 mt-1">Have a claim code? Click here</button>
 </footer>
 
 <script>
-    // ---------- FIXED WHATSAPP NUMBER ----------
-    const ADMIN_PHONE = "233240058049"; // Your WhatsApp number (without + or spaces)
+    // ---------- CONSTANTS ----------
+    const ADMIN_PHONE = "233240058049";
     const ADMIN_PASSWORD = "admin123";
     
     // ---------- APP STATE ----------
@@ -306,59 +340,8 @@
     
     let userBalance = parseFloat(localStorage.getItem(`balance_${userId}`)) || 0.00;
     
-    // Check for claim links on page load
-    function checkForClaimLink() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const claimCode = urlParams.get('claim');
-        
-        if (claimCode) {
-            claimFunds(claimCode);
-            window.history.replaceState({}, document.title, window.location.pathname);
-        }
-    }
-    
-    function claimFunds(claimCode) {
-        const claims = JSON.parse(localStorage.getItem('pending_claims') || '{}');
-        const claim = claims[claimCode];
-        
-        if (!claim) {
-            showToast("❌ Invalid or expired claim link!");
-            return;
-        }
-        
-        if (Date.now() - claim.timestamp > 24 * 60 * 60 * 1000) {
-            delete claims[claimCode];
-            localStorage.setItem('pending_claims', JSON.stringify(claims));
-            showToast("❌ This claim link has expired!");
-            return;
-        }
-        
-        if (claim.userId !== userId) {
-            showToast(`❌ This link is for user ${claim.userId}. You are ${userId}.`);
-            return;
-        }
-        
-        userBalance += claim.amount;
-        saveBalance();
-        refreshBalanceUI();
-        
-        delete claims[claimCode];
-        localStorage.setItem('pending_claims', JSON.stringify(claims));
-        
-        showToast(`✅ ${claim.amount} GHS added to your balance! New balance: ${userBalance.toFixed(2)} GHS`);
-        
-        setTimeout(() => {
-            alert(`🎉 Funds added!\nYour new balance is ${userBalance.toFixed(2)} GHS`);
-        }, 500);
-    }
-    
-    function showToast(message) {
-        const toast = document.createElement('div');
-        toast.className = 'toast';
-        toast.innerHTML = message;
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 3000);
-    }
+    // ---------- CLAIM SYSTEM (Works across devices!) ----------
+    // Claims are stored in localStorage but SHARED via CODE that user enters manually
     
     function saveBalance() {
         localStorage.setItem(`balance_${userId}`, userBalance.toString());
@@ -371,6 +354,124 @@
         localStorage.setItem('booster_all_users', JSON.stringify(users));
     }
     
+    // Create a claim (stores in admin's localStorage)
+    window.createClaim = function() {
+        const targetUserId = document.getElementById('admin-user-id').value.trim();
+        const amount = parseFloat(document.getElementById('admin-amount').value);
+        
+        if (!targetUserId) { alert("❌ Please enter a User ID"); return; }
+        if (isNaN(amount) || amount <= 0) { alert("❌ Please enter a valid amount"); return; }
+        
+        // Generate a simple claim code (6 characters)
+        const claimCode = Math.random().toString(36).substr(2, 6).toUpperCase();
+        
+        // Store the claim
+        const claims = JSON.parse(localStorage.getItem('pending_claims') || '{}');
+        claims[claimCode] = { 
+            userId: targetUserId, 
+            amount: amount, 
+            timestamp: Date.now(),
+            claimed: false
+        };
+        localStorage.setItem('pending_claims', JSON.stringify(claims));
+        
+        // Create message for user
+        const waMessage = `🎉 *FUNDS READY TO CLAIM!* 🎉%0A%0A` +
+                          `Hello! Your funds of *${amount} GHS* are ready.%0A%0A` +
+                          `🔑 *Your Claim Code:* \`${claimCode}\`%0A%0A` +
+                          `📱 *How to claim:*%0A` +
+                          `1. Open the Booster Spark app%0A` +
+                          `2. Scroll to the bottom of the page%0A` +
+                          `3. Click "Have a claim code? Click here"%0A` +
+                          `4. Enter this code: ${claimCode}%0A%0A` +
+                          `The code expires in 24 hours.%0A%0A` +
+                          `Thank you for using Booster Spark! 🚀`;
+        
+        const whatsappUrl = `https://wa.me/${ADMIN_PHONE}?text=${waMessage}`;
+        
+        // Copy code to clipboard
+        navigator.clipboard.writeText(claimCode);
+        
+        alert(`✅ Claim created!\n\nCode: ${claimCode}\nAmount: ${amount} GHS\nUser ID: ${targetUserId}\n\nCode copied to clipboard!\n\nClick OK to open WhatsApp and send the code to the user.`);
+        
+        window.open(whatsappUrl, '_blank');
+        
+        document.getElementById('admin-user-id').value = '';
+        document.getElementById('admin-amount').value = '';
+        refreshPendingClaims();
+    };
+    
+    // User claims with code
+    window.claimWithCode = function() {
+        const claimCode = document.getElementById('claim-code-input').value.trim().toUpperCase();
+        
+        if (!claimCode) {
+            alert("❌ Please enter a claim code");
+            return;
+        }
+        
+        const claims = JSON.parse(localStorage.getItem('pending_claims') || '{}');
+        const claim = claims[claimCode];
+        
+        if (!claim) {
+            alert("❌ Invalid claim code! Please check and try again.");
+            return;
+        }
+        
+        if (claim.claimed) {
+            alert("❌ This claim code has already been used!");
+            return;
+        }
+        
+        if (Date.now() - claim.timestamp > 24 * 60 * 60 * 1000) {
+            alert("❌ This claim code has expired (24 hours limit).");
+            delete claims[claimCode];
+            localStorage.setItem('pending_claims', JSON.stringify(claims));
+            return;
+        }
+        
+        // Check if this code is for this user
+        if (claim.userId !== userId) {
+            alert(`❌ This claim code is for user ${claim.userId}.\n\nYour User ID is: ${userId}\n\nPlease contact admin for the correct code.`);
+            return;
+        }
+        
+        // Add funds
+        userBalance += claim.amount;
+        saveBalance();
+        refreshBalanceUI();
+        
+        // Mark as claimed
+        claim.claimed = true;
+        claims[claimCode] = claim;
+        localStorage.setItem('pending_claims', JSON.stringify(claims));
+        
+        closeClaimModal();
+        document.getElementById('claim-code-input').value = '';
+        
+        alert(`✅ SUCCESS!\n\n${claim.amount} GHS added to your balance!\n\nNew balance: ${userBalance.toFixed(2)} GHS`);
+        showToast(`🎉 ${claim.amount} GHS added! New balance: ${userBalance.toFixed(2)} GHS`);
+        
+        refreshPendingClaims();
+    };
+    
+    window.openClaimModal = function() {
+        document.getElementById('claim-modal').classList.remove('hidden');
+    };
+    
+    window.closeClaimModal = function() {
+        document.getElementById('claim-modal').classList.add('hidden');
+    };
+    
+    function showToast(message) {
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.innerHTML = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    }
+    
+    // ---------- UI FUNCTIONS ----------
     const ratePer100Map = { tiktok: 7.00, instagram: 6.00, facebook: 8.00, youtube: 11.00 };
     let currentRatePer100 = 7.00;
     let currentPlatform = 'tiktok';
@@ -387,8 +488,6 @@
     const serviceSelect = document.getElementById('service-select');
     const linkLabel = document.getElementById('link-label');
     const targetLinkInput = document.getElementById('target-link');
-    
-    let logoClickCount = 0, logoClickTimer = null, footerClickCount = 0, footerClickTimer = null;
     
     function refreshBalanceUI() {
         const formatted = userBalance.toFixed(2) + " GHS";
@@ -485,50 +584,19 @@
         }
     };
     
-    window.createClaimLink = function() {
-        const targetUserId = document.getElementById('admin-user-id').value.trim();
-        const amount = parseFloat(document.getElementById('admin-amount').value);
-        
-        if (!targetUserId) { alert("❌ Please enter a User ID"); return; }
-        if (isNaN(amount) || amount <= 0) { alert("❌ Please enter a valid amount"); return; }
-        
-        const claimCode = Math.random().toString(36).substr(2, 16).toUpperCase();
-        const claims = JSON.parse(localStorage.getItem('pending_claims') || '{}');
-        claims[claimCode] = { userId: targetUserId, amount: amount, timestamp: Date.now() };
-        localStorage.setItem('pending_claims', JSON.stringify(claims));
-        
-        const claimLink = `${window.location.origin}${window.location.pathname}?claim=${claimCode}`;
-        const waMessage = `🎉 *FUNDS READY TO CLAIM!* 🎉%0A%0A` +
-                          `Hello! Your funds of *${amount} GHS* are ready.%0A%0A` +
-                          `👇 *Click this link to claim:*%0A` +
-                          `${claimLink}%0A%0A` +
-                          `The link expires in 24 hours. Once you click it, the funds will be added to your Booster Spark account instantly!%0A%0A` +
-                          `Thank you for using Booster Spark! 🚀`;
-        
-        // FIXED: Proper WhatsApp URL format
-        const whatsappUrl = `https://wa.me/${ADMIN_PHONE}?text=${waMessage}`;
-        
-        navigator.clipboard.writeText(claimLink);
-        alert(`✅ Claim link generated!\n\nAmount: ${amount} GHS\nUser ID: ${targetUserId}\n\nLink copied to clipboard!\n\nClick OK to open WhatsApp and send to user.`);
-        
-        window.open(whatsappUrl, '_blank');
-        
-        document.getElementById('admin-user-id').value = '';
-        document.getElementById('admin-amount').value = '';
-        refreshPendingClaims();
-    };
-    
     window.refreshPendingClaims = function() {
         const claims = JSON.parse(localStorage.getItem('pending_claims') || '{}');
         const container = document.getElementById('pending-claims-list');
         
-        if (Object.keys(claims).length === 0) {
-            container.innerHTML = '<div class="text-center text-gray-500 py-8 text-sm">No pending claims</div>';
+        const activeClaims = Object.entries(claims).filter(([_, c]) => !c.claimed && Date.now() - c.timestamp < 24 * 60 * 60 * 1000);
+        
+        if (activeClaims.length === 0) {
+            container.innerHTML = '<div class="text-center text-gray-500 py-8 text-sm">No active pending claims</div>';
             return;
         }
         
         let html = '<div class="divide-y divide-slate-700">';
-        for (const [code, claim] of Object.entries(claims)) {
+        for (const [code, claim] of activeClaims) {
             const timeLeft = 24 - Math.floor((Date.now() - claim.timestamp) / (1000 * 60 * 60));
             html += `<div class="p-3">
                         <div class="flex justify-between items-center">
@@ -537,19 +605,20 @@
                                 <p class="text-green-400 font-bold">${claim.amount} GHS</p>
                                 <p class="text-[10px] text-gray-500">Expires in ${timeLeft}h</p>
                             </div>
-                            <button onclick="copyClaimLink('${code}')" class="text-xs bg-purple-600 px-2 py-1 rounded">Copy Link</button>
+                            <div>
+                                <span class="font-mono text-sm bg-slate-700 px-2 py-1 rounded mr-2">${code}</span>
+                                <button onclick="copyClaimCode('${code}')" class="text-xs bg-purple-600 px-2 py-1 rounded">Copy</button>
+                            </div>
                         </div>
-                        <p class="text-[10px] font-mono text-gray-500 mt-1">${code}</p>
                      </div>`;
         }
         html += '</div>';
         container.innerHTML = html;
     };
     
-    window.copyClaimLink = function(claimCode) {
-        const claimLink = `${window.location.origin}${window.location.pathname}?claim=${claimCode}`;
-        navigator.clipboard.writeText(claimLink);
-        alert("✅ Claim link copied to clipboard!");
+    window.copyClaimCode = function(code) {
+        navigator.clipboard.writeText(code);
+        alert("✅ Claim code copied to clipboard!");
     };
     
     function getAllUsers() {
@@ -585,7 +654,7 @@
                         </td>
                        </tr>`;
         });
-        html += '</tbody></table>';
+        html += '</tbody><table>';
         container.innerHTML = html;
     };
     
@@ -596,6 +665,7 @@
     };
     
     // Secret admin triggers
+    let logoClickCount = 0, logoClickTimer = null, footerClickCount = 0, footerClickTimer = null;
     function triggerLogoClick() { logoClickCount++; if (logoClickTimer) clearTimeout(logoClickTimer); if (logoClickCount >= 5) { logoClickCount = 0; openAdminPanel(); } logoClickTimer = setTimeout(() => { logoClickCount = 0; }, 800); }
     function triggerFooterClick() { footerClickCount++; if (footerClickTimer) clearTimeout(footerClickTimer); if (footerClickCount >= 3) { footerClickCount = 0; openAdminPanel(); } footerClickTimer = setTimeout(() => { footerClickCount = 0; }, 600); }
     
@@ -614,13 +684,12 @@
         if (logo) logo.addEventListener('click', triggerLogoClick);
         const footer = document.querySelector('footer');
         if (footer) footer.addEventListener('click', triggerFooterClick);
-        checkForClaimLink();
         saveBalance();
         refreshBalanceUI();
     });
     
     window.contactAdminForDeposit = function(amount) {
-        const message = `💰 *FUNDING REQUEST* 💰%0A%0AAmount: ${amount} GHS%0AUser ID: ${userId}%0APlease send claim link to this ID.`;
+        const message = `💰 *FUNDING REQUEST* 💰%0A%0AAmount: ${amount} GHS%0AUser ID: ${userId}`;
         window.open(`https://wa.me/${ADMIN_PHONE}?text=${message}`, '_blank');
         closeDeposit();
     };
@@ -647,7 +716,7 @@
     window.openDeposit = function() { document.getElementById('deposit-modal').classList.remove('hidden'); refreshBalanceUI(); };
     window.closeDeposit = function() { document.getElementById('deposit-modal').classList.add('hidden'); };
     
-    // FIXED: Purchase button - sends COMPLETE order details to YOUR WhatsApp
+    // Purchase flow
     window.processPurchaseFlow = async function() {
         const btn = document.getElementById('purchaseSparkBtn');
         const originalHTML = btn.innerHTML;
@@ -676,7 +745,6 @@
             return;
         }
         
-        // Deduct balance
         userBalance -= totalCost;
         saveBalance();
         refreshBalanceUI();
@@ -684,7 +752,6 @@
         const platformDisplay = currentPlatform.charAt(0).toUpperCase() + currentPlatform.slice(1);
         const selectedService = serviceSelect.options[serviceSelect.selectedIndex]?.text || "Standard";
         
-        // FIXED: Complete order message with ALL details
         const orderMessage = `🚀 *NEW BOOSTER SPARK ORDER* 🔥%0A%0A` +
                             `📱 *Platform:* ${platformDisplay}%0A` +
                             `⚙️ *Service:* ${selectedService}%0A` +
@@ -696,7 +763,6 @@
                             `💳 *Remaining Balance:* ${userBalance.toFixed(2)} GHS%0A%0A` +
                             `✅ _Order confirmed. Please process delivery._`;
         
-        // FIXED: Correct WhatsApp URL for YOUR number
         const whatsappUrl = `https://wa.me/${ADMIN_PHONE}?text=${orderMessage}`;
         
         btn.innerHTML = originalHTML;
@@ -704,7 +770,6 @@
         
         alert(`✅ ORDER PLACED SUCCESSFULLY!\n\n📊 Quantity: ${qty.toLocaleString()}\n💰 Total: ${totalCost.toFixed(2)} GHS\n💎 Remaining Balance: ${userBalance.toFixed(2)} GHS\n\n📱 Redirecting to WhatsApp...`);
         
-        // Open WhatsApp with your number
         window.open(whatsappUrl, '_blank');
     };
     
@@ -751,4 +816,4 @@
     refreshBalanceUI();
 </script>
 </body>
-                </html>
+    </html>
