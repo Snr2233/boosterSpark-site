@@ -286,10 +286,9 @@
 
 <script>
     // ============================================
-    // GOOGLE SHEETS DATABASE CONFIGURATION
+    // GOOGLE SHEETS DATABASE - UPDATED URL
     // ============================================
-    // YOUR GOOGLE SHEETS WEB APP URL
-    const GOOGLE_SHEETS_API = "https://script.google.com/macros/s/AKfycbwzlUq4Zd4PLUJmgzyyD8Pu0Il8i2yZcG2Ygaub2X4DB_xu5P67YIEyi_Du8BmQy5oy/exec";
+    const GOOGLE_SHEETS_API = "https://script.google.com/macros/s/AKfycbz8D8iFyNRtJmLMNO3opME3c04IYYDUV5VjOYGWGcLbSJyf6Wq6K6xQYupaYVHeny6n7g/exec";
     
     const ADMIN_PHONE = "233240058049";
     const ADMIN_PASSWORD = "admin123";
@@ -313,14 +312,12 @@
         localStorage.setItem('booster_all_users', JSON.stringify(users));
     }
     
-    // ============================================
-    // CLOUD FUNCTIONS (Google Sheets)
-    // ============================================
-    
+    // Cloud Functions
     async function callGoogleSheets(action, data) {
         try {
             const response = await fetch(GOOGLE_SHEETS_API, {
                 method: 'POST',
+                mode: 'cors',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action, ...data })
             });
@@ -331,7 +328,7 @@
         }
     }
     
-    // Create claim in cloud
+    // Create claim
     window.createClaim = async function() {
         const targetUserId = document.getElementById('admin-user-id').value.trim();
         const amount = parseFloat(document.getElementById('admin-amount').value);
@@ -347,46 +344,39 @@
         btn.disabled = true;
         
         try {
-            await callGoogleSheets('createClaim', {
+            const result = await callGoogleSheets('createClaim', {
                 claimCode: claimCode,
                 userId: targetUserId,
                 amount: amount,
                 timestamp: Date.now()
             });
             
-            // Also store locally for backup
-            const claims = JSON.parse(localStorage.getItem('pending_claims') || '{}');
-            claims[claimCode] = { 
-                userId: targetUserId, 
-                amount: amount, 
-                timestamp: Date.now(),
-                claimed: false
-            };
-            localStorage.setItem('pending_claims', JSON.stringify(claims));
-            
-            const waMessage = `🎉 *FUNDS READY TO CLAIM!* 🎉%0A%0A` +
-                              `Amount: ${amount} GHS%0A` +
-                              `🔑 *Your Claim Code:* ${claimCode}%0A%0A` +
-                              `Go to Booster Spark app → Scroll to bottom → Click "HAVE A CLAIM CODE?" → Enter: ${claimCode}`;
-            
-            const whatsappUrl = `https://wa.me/${ADMIN_PHONE}?text=${waMessage}`;
-            navigator.clipboard.writeText(claimCode);
-            alert(`✅ Claim created and saved to cloud!\n\nCode: ${claimCode}\nAmount: ${amount} GHS\n\nCode copied! Open WhatsApp to send to user.`);
-            window.open(whatsappUrl, '_blank');
-            
-            document.getElementById('admin-user-id').value = '';
-            document.getElementById('admin-amount').value = '';
-            refreshPendingClaims();
-            
+            if (result && result.success) {
+                const waMessage = `🎉 *FUNDS READY TO CLAIM!* 🎉%0A%0A` +
+                                  `Amount: ${amount} GHS%0A` +
+                                  `🔑 *Your Claim Code:* ${claimCode}%0A%0A` +
+                                  `Go to Booster Spark app → Scroll to bottom → Click "HAVE A CLAIM CODE?" → Enter: ${claimCode}`;
+                
+                const whatsappUrl = `https://wa.me/${ADMIN_PHONE}?text=${waMessage}`;
+                navigator.clipboard.writeText(claimCode);
+                alert(`✅ Claim created in cloud!\n\nCode: ${claimCode}\nAmount: ${amount} GHS\n\nCode copied! Send to user via WhatsApp.`);
+                window.open(whatsappUrl, '_blank');
+                
+                document.getElementById('admin-user-id').value = '';
+                document.getElementById('admin-amount').value = '';
+                refreshPendingClaims();
+            } else {
+                alert("❌ Failed to create claim. Please try again.");
+            }
         } catch(e) {
-            alert("❌ Error saving to cloud. Check your Google Sheets API URL.");
+            alert("❌ Error: " + e.message);
         } finally {
             btn.innerHTML = originalText;
             btn.disabled = false;
         }
     };
     
-    // User claims with code (checks cloud)
+    // Claim funds
     window.claimWithCode = async function() {
         const claimCode = document.getElementById('claim-code-input').value.trim().toUpperCase();
         
@@ -434,7 +424,7 @@
             saveBalance();
             refreshBalanceUI();
             
-            // Mark as claimed in cloud
+            // Mark as claimed
             await callGoogleSheets('markClaimed', { claimCode: claimCode });
             
             closeClaimModal();
@@ -444,18 +434,17 @@
             refreshPendingClaims();
             
         } catch(e) {
-            alert("❌ Error checking claim. Please try again.");
-            console.error(e);
+            alert("❌ Error checking claim. Please try again.\n\n" + e.message);
         } finally {
             btn.innerHTML = originalText;
             btn.disabled = false;
         }
     };
     
-    // Refresh pending claims from cloud
+    // Refresh pending claims
     window.refreshPendingClaims = async function() {
         const container = document.getElementById('pending-claims-list');
-        container.innerHTML = '<div class="text-center text-gray-500 py-8 text-sm"><span class="loading-spinner"></span> Loading claims from cloud...</div>';
+        container.innerHTML = '<div class="text-center text-gray-500 py-8 text-sm"><span class="loading-spinner"></span> Loading claims...</div>';
         
         try {
             const result = await callGoogleSheets('getAllClaims', {});
@@ -485,7 +474,7 @@
                 html += '</div>';
                 container.innerHTML = html;
             } else {
-                container.innerHTML = '<div class="text-center text-gray-500 py-8 text-sm">No active pending claims</div>';
+                container.innerHTML = '<div class="text-center text-gray-500 py-8 text-sm">No claims found</div>';
             }
         } catch(e) {
             container.innerHTML = '<div class="text-center text-gray-500 py-8 text-sm">Error loading claims</div>';
@@ -494,7 +483,7 @@
     
     window.copyClaimCode = function(code) { navigator.clipboard.writeText(code); alert("✅ Code copied!"); };
     
-    // UI Functions
+    // UI Functions (same as before)
     const ratePer100Map = { tiktok: 7.00, instagram: 6.00, facebook: 8.00, youtube: 11.00 };
     let currentRatePer100 = 7.00;
     let currentPlatform = 'tiktok';
