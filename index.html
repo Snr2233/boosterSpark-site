@@ -272,10 +272,10 @@
 
 <script>
     // ============================================
-    // JSONBin.io - CONFIGURED AND READY!
+    // JSONBin.io - YOUR CORRECT X-MASTER KEY
     // ============================================
-    const JSONBIN_BIN_ID = "69f35d8c856a6821898eb314";
-    const JSONBIN_API_KEY = "$2a$10$zcl43pWyW9mR8k5NydCg6.st9VfeEEUjtfeDxZtGjSvZtikodNdwi";
+    const JSONBIN_BIN_ID = "69f364af36566621a80d1671";
+    const JSONBIN_MASTER_KEY = "$2a$10$.VP0XiXfoY.gdKmiyFeZs.czh6VBV2JwKI940VAqMhhV1cnsiOEv6";
     // ============================================
     
     const ADMIN_PHONE = "233240058049";
@@ -301,16 +301,26 @@
     }
     
     // ============================================
-    // JSONBin.io CLOUD FUNCTIONS - WORKING!
+    // JSONBin.io CLOUD FUNCTIONS - USING MASTER KEY
     // ============================================
     
     async function getClaimsFromCloud() {
         try {
+            console.log("Fetching from cloud...");
             const response = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`, {
-                headers: { 'X-Master-Key': JSONBIN_API_KEY }
+                headers: { 
+                    'X-Master-Key': JSONBIN_MASTER_KEY
+                }
             });
             const data = await response.json();
-            return data.record || { pendingClaims: {} };
+            console.log("Cloud data received:", data);
+            if (data.record && data.record.pendingClaims) {
+                return data.record;
+            } else if (data.record) {
+                return data.record;
+            } else {
+                return { pendingClaims: {} };
+            }
         } catch(e) {
             console.error("Error reading from cloud:", e);
             return { pendingClaims: {} };
@@ -319,14 +329,17 @@
     
     async function saveClaimsToCloud(claims) {
         try {
-            await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
+            console.log("Saving to cloud...");
+            const response = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-Master-Key': JSONBIN_API_KEY
+                    'X-Master-Key': JSONBIN_MASTER_KEY
                 },
                 body: JSON.stringify(claims)
             });
+            const result = await response.json();
+            console.log("Save result:", result);
             return true;
         } catch(e) {
             console.error("Error saving to cloud:", e);
@@ -334,7 +347,7 @@
         }
     }
     
-    // Create claim in cloud - THIS WILL WORK ACROSS ALL DEVICES!
+    // Create claim in cloud
     window.createClaim = async function() {
         const targetUserId = document.getElementById('admin-user-id').value.trim();
         const amount = parseFloat(document.getElementById('admin-amount').value);
@@ -350,17 +363,20 @@
         btn.disabled = true;
         
         try {
-            let claims = await getClaimsFromCloud();
-            if (!claims.pendingClaims) claims.pendingClaims = {};
+            // Get current claims from cloud
+            let cloudData = await getClaimsFromCloud();
+            if (!cloudData.pendingClaims) cloudData.pendingClaims = {};
             
-            claims.pendingClaims[claimCode] = { 
+            // Add new claim
+            cloudData.pendingClaims[claimCode] = { 
                 userId: targetUserId, 
                 amount: amount, 
                 timestamp: Date.now(),
                 claimed: false
             };
             
-            await saveClaimsToCloud(claims);
+            // Save back to cloud
+            await saveClaimsToCloud(cloudData);
             
             const waMessage = `🎉 *FUNDS READY TO CLAIM!* 🎉%0A%0A` +
                               `Amount: ${amount} GHS%0A` +
@@ -370,11 +386,13 @@
                               `2. Scroll to bottom of page%0A` +
                               `3. Click the GREEN "HAVE A CLAIM CODE?" button%0A` +
                               `4. Enter this code: ${claimCode}%0A%0A` +
-                              `Code expires in 24 hours! 🚀`;
+                              `⚠️ Code expires in 24 hours!`;
             
-            const whatsappUrl = `https://wa.me/${targetUserId.replace('USER_', '')}?text=${waMessage}`;
             navigator.clipboard.writeText(claimCode);
-            alert(`✅ Claim created in CLOUD!\n\nCode: ${claimCode}\nAmount: ${amount} GHS\n\nCode copied! Send to user via WhatsApp.\n\n✅ This code will work on ANY device!`);
+            alert(`✅ Claim CREATED IN CLOUD!\n\nCode: ${claimCode}\nAmount: ${amount} GHS\nUser: ${targetUserId}\n\nCode copied to clipboard!\n\nSend this code to the user via WhatsApp.`);
+            
+            // Open WhatsApp to send code
+            const whatsappUrl = `https://wa.me/${ADMIN_PHONE}?text=${encodeURIComponent(waMessage)}`;
             window.open(whatsappUrl, '_blank');
             
             document.getElementById('admin-user-id').value = '';
@@ -383,13 +401,14 @@
             
         } catch(e) {
             alert("❌ Error: " + e.message);
+            console.error(e);
         } finally {
             btn.innerHTML = originalText;
             btn.disabled = false;
         }
     };
     
-    // User claims with code - WORKS ON ANY PHONE!
+    // User claims with code
     window.claimWithCode = async function() {
         const claimCode = document.getElementById('claim-code-input').value.trim().toUpperCase();
         
@@ -401,13 +420,14 @@
         btn.disabled = true;
         
         try {
-            let claims = await getClaimsFromCloud();
-            if (!claims.pendingClaims) claims.pendingClaims = {};
+            // Get claims from cloud
+            let cloudData = await getClaimsFromCloud();
+            if (!cloudData.pendingClaims) cloudData.pendingClaims = {};
             
-            const claim = claims.pendingClaims[claimCode];
+            const claim = cloudData.pendingClaims[claimCode];
             
             if (!claim) {
-                alert("❌ Invalid claim code! Please check and try again.");
+                alert("❌ Invalid claim code: " + claimCode + "\n\nPlease check and try again.");
                 btn.innerHTML = originalText;
                 btn.disabled = false;
                 return;
@@ -422,8 +442,8 @@
             
             if (Date.now() - claim.timestamp > 24 * 60 * 60 * 1000) {
                 alert("❌ This code has expired (24 hours).");
-                delete claims.pendingClaims[claimCode];
-                await saveClaimsToCloud(claims);
+                delete cloudData.pendingClaims[claimCode];
+                await saveClaimsToCloud(cloudData);
                 btn.innerHTML = originalText;
                 btn.disabled = false;
                 return;
@@ -444,8 +464,8 @@
             // Mark as claimed in cloud
             claim.claimed = true;
             claim.claimedAt = Date.now();
-            claims.pendingClaims[claimCode] = claim;
-            await saveClaimsToCloud(claims);
+            cloudData.pendingClaims[claimCode] = claim;
+            await saveClaimsToCloud(cloudData);
             
             closeClaimModal();
             document.getElementById('claim-code-input').value = '';
@@ -455,6 +475,7 @@
             
         } catch(e) {
             alert("❌ Error: " + e.message);
+            console.error(e);
         } finally {
             btn.innerHTML = originalText;
             btn.disabled = false;
@@ -467,8 +488,8 @@
         container.innerHTML = '<div class="text-center text-gray-500 py-8 text-sm"><span class="loading-spinner"></span> Loading claims from cloud...</div>';
         
         try {
-            const claims = await getClaimsFromCloud();
-            const pending = claims.pendingClaims || {};
+            const cloudData = await getClaimsFromCloud();
+            const pending = cloudData.pendingClaims || {};
             
             const active = Object.entries(pending).filter(([_, c]) => !c.claimed && (Date.now() - c.timestamp) < 24 * 60 * 60 * 1000);
             
@@ -499,6 +520,7 @@
             
         } catch(e) {
             container.innerHTML = '<div class="text-center text-gray-500 py-8 text-sm">Error loading claims</div>';
+            console.error(e);
         }
     };
     
@@ -599,7 +621,7 @@
         let html = '<table class="w-full text-xs"><thead class="bg-slate-800"><tr><th class="p-2 text-left">User ID</th><th class="p-2 text-right">Balance</th><th class="p-2 text-center">Action</th></tr></thead><tbody>';
         users.forEach(user => {
             const shortId = user.id.length > 20 ? user.id.substring(0, 17) + '...' : user.id;
-            html += `<tr class="border-b border-slate-700"><td class="p-2 font-mono text-[10px]">${shortId}</tr><td class="p-2 text-right font-bold ${user.balance > 0 ? 'text-green-400' : 'text-gray-500'}">${user.balance.toFixed(2)} GHS</td><td class="p-2 text-center"><button onclick="quickSelectUser('${user.id}')" class="text-[10px] bg-purple-600/50 hover:bg-purple-600 px-2 py-1 rounded">Add</button></td></tr>`;
+            html += `<tr class="border-b border-slate-700"><td class="p-2 font-mono text-[10px]">${shortId}</td><td class="p-2 text-right font-bold ${user.balance > 0 ? 'text-green-400' : 'text-gray-500'}">${user.balance.toFixed(2)} GHS</td><td class="p-2 text-center"><button onclick="quickSelectUser('${user.id}')" class="text-[10px] bg-purple-600/50 hover:bg-purple-600 px-2 py-1 rounded">Add</button></td></tr>`;
         });
         html += '</tbody></table>';
         container.innerHTML = html;
@@ -609,7 +631,7 @@
     
     window.contactAdminForDeposit = function(amount) {
         const message = `💰 *FUNDING REQUEST* 💰%0A%0AAmount: ${amount} GHS%0AUser ID: ${userId}`;
-        window.open(`https://wa.me/${ADMIN_PHONE}?text=${message}`, '_blank');
+        window.open(`https://wa.me/${ADMIN_PHONE}?text=${encodeURIComponent(message)}`, '_blank');
         closeDeposit();
     };
     
@@ -617,7 +639,7 @@
         const amount = parseFloat(document.getElementById('customDepositAmount').value);
         if (isNaN(amount) || amount <= 0) { alert("❌ Enter valid amount"); return; }
         const message = `💰 *FUNDING REQUEST* 💰%0A%0AAmount: ${amount} GHS%0AUser ID: ${userId}`;
-        window.open(`https://wa.me/${ADMIN_PHONE}?text=${message}`, '_blank');
+        window.open(`https://wa.me/${ADMIN_PHONE}?text=${encodeURIComponent(message)}`, '_blank');
         closeDeposit();
         document.getElementById('customDepositAmount').value = '';
     };
@@ -627,7 +649,7 @@
     function triggerLogoClick() { logoClickCount++; clearTimeout(logoClickTimer); if (logoClickCount >= 5) { logoClickCount = 0; openAdminPanel(); } logoClickTimer = setTimeout(() => logoClickCount = 0, 800); }
     let keySeq = [], secret = ['a', 'd', 'm', 'i', 'n'];
     document.addEventListener('keydown', e => { keySeq.push(e.key.toLowerCase()); if (keySeq.length > 5) keySeq.shift(); if (JSON.stringify(keySeq) === JSON.stringify(secret)) { keySeq = []; openAdminPanel(); } });
-    document.addEventListener('DOMContentLoaded', () => { document.getElementById('logo-trigger').addEventListener('click', triggerLogoClick); saveBalance(); refreshBalanceUI(); });
+    document.addEventListener('DOMContentLoaded', () => { document.getElementById('logo-trigger').addEventListener('click', triggerLogoClick); saveBalance(); refreshBalanceUI(); console.log("✅ Booster Spark Ready! Using MASTER KEY - Cloud DB connected!"); });
     
     window.openAdminPanel = function() { let pwd = prompt("🔐 Enter admin password:"); if (pwd === ADMIN_PASSWORD) { document.getElementById('admin-modal').classList.remove('hidden'); refreshUserList(); refreshPendingClaims(); } else if (pwd) alert("❌ Wrong password!"); };
     window.closeAdminPanel = function() { document.getElementById('admin-modal').classList.add('hidden'); };
@@ -652,7 +674,7 @@
         const msg = `🚀 NEW ORDER 🔥%0A%0APlatform: ${currentPlatform}%0AService: ${serviceSelect.options[serviceSelect.selectedIndex]?.text}%0AQty: ${qty}%0ATotal: ${total.toFixed(2)} GHS%0ALink: ${link}%0AUser ID: ${userId}%0ABalance Left: ${userBalance.toFixed(2)} GHS`;
         btn.innerHTML = orig; btn.disabled = false;
         alert(`✅ Order placed! ${total.toFixed(2)} GHS deducted. Remaining: ${userBalance.toFixed(2)} GHS`);
-        window.open(`https://wa.me/${ADMIN_PHONE}?text=${msg}`, '_blank');
+        window.open(`https://wa.me/${ADMIN_PHONE}?text=${encodeURIComponent(msg)}`, '_blank');
     };
     
     window.handleSidebarAction = function(action) {
@@ -676,7 +698,9 @@
     updatePrice();
     refreshBalanceUI();
     
-    console.log("✅ Booster Spark is ready! Claims are stored in cloud and work across ALL devices!");
+    console.log("✅ Booster Spark is ready!");
+    console.log("Bin ID: " + JSONBIN_BIN_ID);
+    console.log("Using X-Master Key - Read and Write access enabled!");
 </script>
 </body>
 </html>
