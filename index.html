@@ -175,11 +175,15 @@
             inset: 0;
             z-index: 200;
             background: var(--bg);
-            display: flex;
             align-items: center;
             justify-content: center;
             padding: 20px;
         }
+        #login-screen.visible { display: flex; }
+        #login-screen.hidden-screen { display: none !important; }
+
+        /* Main App */
+        #main-app.hidden-screen { display: none !important; }
 
         /* Price tag shimmer */
         .price-shimmer {
@@ -210,7 +214,7 @@
 <body>
 
 <!-- ===================== LOGIN SCREEN ===================== -->
-<div id="login-screen">
+<div id="login-screen" class="visible">
     <div class="w-full max-w-sm animate-fade-up" style="position:relative;z-index:1;">
         <div class="text-center mb-8">
             <div class="font-display text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500 mb-1">BOOSTER SPARK</div>
@@ -315,7 +319,7 @@
 </div>
 
 <!-- ===================== MAIN APP ===================== -->
-<div id="main-app" class="hidden">
+<div id="main-app" class="hidden-screen">
 
 <!-- SIDEBAR OVERLAY -->
 <div id="sidebar-overlay" class="fixed inset-0 bg-black/70 z-40 hidden backdrop-blur-sm" onclick="toggleMenu()"></div>
@@ -996,10 +1000,20 @@ window.handleLogout = function() {
     if (!confirm('Log out of Booster Spark?')) return;
     clearSession();
     currentUser = null;
-    cloudCache = null;
-    document.getElementById('main-app').classList.add('hidden');
-    document.getElementById('login-screen').classList.remove('hidden');
-    showToast('Logged out', 'info');
+    cloudCache  = null;
+
+    const loginScreen = document.getElementById('login-screen');
+    const mainApp     = document.getElementById('main-app');
+
+    mainApp.classList.add('hidden-screen');
+    loginScreen.classList.remove('hidden-screen');
+    loginScreen.classList.add('visible');
+
+    // Reset login form
+    document.getElementById('login-email').value    = '';
+    document.getElementById('login-password').value = '';
+    showAuthTab('login');
+    showToast('Logged out successfully', 'info');
 };
 
 // ============================================================
@@ -1046,11 +1060,15 @@ async function tryAutoLogin() {
 function bootApp() {
     if (!currentUser) return;
 
-    // 1. Hide login, show app RIGHT AWAY
-    document.getElementById('login-screen').classList.add('hidden');
-    document.getElementById('main-app').classList.remove('hidden');
+    // 1. Switch screens using our own CSS classes (not Tailwind)
+    const loginScreen = document.getElementById('login-screen');
+    const mainApp     = document.getElementById('main-app');
 
-    // 2. Update all UI with current user data
+    loginScreen.classList.remove('visible');
+    loginScreen.classList.add('hidden-screen');
+    mainApp.classList.remove('hidden-screen');
+
+    // 2. Update all UI with current user data immediately
     refreshUI();
 
     // 3. Set up the order form
