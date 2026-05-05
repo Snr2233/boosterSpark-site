@@ -735,18 +735,45 @@ const DEFAULT_PRICES = { tiktok:7, instagram:6, facebook:8, youtube:11, telegram
 let ratePer100Map = { ...DEFAULT_PRICES };
 
 // ============================================================
-// CLOUD DATA (JSONBin)
+// CLOUD DATA (JSONBin) — with timeout & retry
 // ============================================================
+async function fetchWithTimeout(url, options={}, timeoutMs=8000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const r = await fetch(url, { ...options, signal: controller.signal });
+        clearTimeout(timer);
+        return r;
+    } catch(e) {
+        clearTimeout(timer);
+        throw e;
+    }
+}
+
 async function getCloudData(force=false) {
     if (cloudCache && !force) return cloudCache;
-    try {
-        const r = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`, {
-            headers: { 'X-Master-Key': JSONBIN_KEY }
-        });
-        const d = await r.json();
-        cloudCache = d.record || {};
-    } catch(e) {
-        cloudCache = cloudCache || {};
+    let attempts = 0;
+    while (attempts < 3) {
+        try {
+            const r = await fetchWithTimeout(
+                `https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`,
+                { headers: { 'X-Master-Key': JSONBIN_KEY } },
+                9000
+            );
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            const d = await r.json();
+            cloudCache = d.record || {};
+            break;
+        } catch(e) {
+            attempts++;
+            if (attempts >= 3) {
+                // Fall back to cache or empty
+                cloudCache = cloudCache || {};
+            } else {
+                // Wait 1s before retry
+                await new Promise(r => setTimeout(r, 1000));
+            }
+        }
     }
     // Ensure all keys exist
     ['users','pendingClaims','referrals','referralStats','orders','pricing','promoCodes','transactions','passwordResets'].forEach(k => {
@@ -756,15 +783,49 @@ async function getCloudData(force=false) {
 }
 
 async function saveCloudData(data) {
-    cloudCache = data;
+    cloudCache = data; // update cache immediately
+    // Keep local backup in sync for current user
+    if (currentUser && data.users?.[currentUser.userId]) {
+        saveLocalBackup(data.users[currentUser.userId]);
+    }
     try {
-        await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_KEY },
-            body: JSON.stringify(data)
-        });
-        return true;
+        const r = await fetchWithTimeout(
+            `https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`,
+            {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_KEY },
+                body: JSON.stringify(data)
+            },
+            10000
+        );
+        return r.ok;
     } catch(e) { return false; }
+}
+
+// ============================================================
+// LOCAL BACKUP — safety net so login never fails if JSONBin is slow
+// ============================================================
+function saveLocalBackup(userData) {
+    try {
+        const backups = JSON.parse(localStorage.getItem('bs_user_backups') || '{}');
+        backups[userData.email] = userData;
+        localStorage.setItem('bs_user_backups', JSON.stringify(backups));
+    } catch(e) {}
+}
+
+function getLocalBackup(email) {
+    try {
+        const backups = JSON.parse(localStorage.getItem('bs_user_backups') || '{}');
+        return backups[email] || null;
+    } catch(e) { return null; }
+}
+
+function updateLocalBackupBalance(userId, balance) {
+    try {
+        const backups = JSON.parse(localStorage.getItem('bs_user_backups') || '{}');
+        const entry = Object.values(backups).find(u => u.userId === userId);
+        if (entry) { entry.balance = balance; backups[entry.email] = entry; localStorage.setItem('bs_user_backups', JSON.stringify(backups)); }
+    } catch(e) {}
 }
 
 // ============================================================
@@ -814,11 +875,13 @@ window.handleRegister = async function() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showToast('Enter a valid email', 'error');
 
     setAuthLoading('register', true);
+    showToast('Creating your account...', 'info');
+
     const cloud = await getCloudData(true);
 
-    // Check email exists
+    // Check email already exists
     const existing = Object.values(cloud.users).find(u => u.email === email);
-    if (existing) { setAuthLoading('register', false); return showToast('Email already registered', 'error'); }
+    if (existing) { setAuthLoading('register', false); return showToast('Email already registered. Please login.', 'error'); }
 
     const userId = generateUserId();
     const newUser = {
@@ -836,17 +899,27 @@ window.handleRegister = async function() {
     // Handle referral tracking
     if (ref && ref !== userId && cloud.users[ref]) {
         if (!cloud.referralStats[ref]) cloud.referralStats[ref] = { totalReferrals:0, totalEarned:0 };
-        if (cloud.referralStats[ref].totalReferrals < MAX_REFERRALS) {
-            cloud.referralStats[ref].totalReferrals += 1;
-        }
+        if (cloud.referralStats[ref].totalReferrals < MAX_REFERRALS) cloud.referralStats[ref].totalReferrals += 1;
         cloud.referrals[userId] = { referredBy: ref, rewardGiven: false };
     }
 
-    await saveCloudData(cloud);
+    // ✅ AWAIT the save so data is in JSONBin before we proceed
+    const saved = await saveCloudData(cloud);
+
+    // ✅ ALWAYS save a local backup so login works even if JSONBin is slow
+    saveLocalBackup(newUser);
+
+    if (!saved) {
+        // JSONBin failed — still let them in using local backup
+        showToast('Account created (offline mode). Login will still work!', 'info');
+    } else {
+        showToast(`Welcome, ${name.split(' ')[0]}! 🎉`, 'success');
+    }
+
+    currentUser = newUser;
+    saveSession(currentUser);
     setAuthLoading('register', false);
-    showToast('Account created! Please login.', 'success');
-    showAuthTab('login');
-    document.getElementById('login-email').value = email;
+    bootApp();
 };
 
 // ============================================================
@@ -858,17 +931,56 @@ window.handleLogin = async function() {
     if (!email || !pwd) return showToast('Enter email and password', 'error');
 
     setAuthLoading('login', true);
-    const cloud = await getCloudData(true);
+    showToast('Signing in...', 'info');
 
-    const user = Object.values(cloud.users).find(u => u.email === email);
-    if (!user || user.password !== hashPassword(pwd)) {
+    const hashed = hashPassword(pwd);
+
+    // ✅ STEP 1: Check local backup first — instant, no network needed
+    const localUser = getLocalBackup(email);
+    if (localUser && localUser.password === hashed) {
+        // Found locally — try to sync latest data from cloud in background
+        currentUser = localUser;
+        saveSession(currentUser);
+
+        // Fetch fresh cloud data in background to sync balance etc.
+        getCloudData(true).then(cloud => {
+            const cloudUser = cloud.users[localUser.userId];
+            if (cloudUser) {
+                currentUser = cloudUser;
+                saveSession(currentUser);
+                saveLocalBackup(cloudUser);
+                refreshUI(); // update balance if it changed
+            }
+        }).catch(() => {}); // silent fail — local data is enough
+
         setAuthLoading('login', false);
-        return showToast('Invalid email or password', 'error');
+        bootApp();
+        return;
     }
 
-    // Update last seen
+    // ✅ STEP 2: Not in local backup — fetch from JSONBin (new device / cleared storage)
+    showToast('Looking up your account...', 'info');
+    let cloud;
+    try {
+        cloud = await getCloudData(true);
+    } catch(e) {
+        setAuthLoading('login', false);
+        return showToast('Connection error. Check your internet and try again.', 'error');
+    }
+
+    const user = Object.values(cloud.users).find(u => u.email === email);
+
+    if (!user || user.password !== hashed) {
+        setAuthLoading('login', false);
+        return showToast('Incorrect email or password', 'error');
+    }
+
+    // Save local backup so next login is instant
+    saveLocalBackup(user);
+
+    // Update last seen in background
     cloud.users[user.userId].lastSeen = new Date().toISOString();
-    await saveCloudData(cloud);
+    saveCloudData(cloud);
 
     currentUser = cloud.users[user.userId];
     saveSession(currentUser);
@@ -895,11 +1007,36 @@ window.handleLogout = function() {
 async function tryAutoLogin() {
     const session = getSession();
     if (!session) return false;
-    const cloud = await getCloudData(true);
-    const user = cloud.users[session.userId];
-    if (!user || user.email !== session.email) { clearSession(); return false; }
-    currentUser = user;
-    return true;
+
+    // ✅ Try local backup first — instant
+    const localUser = getLocalBackup(session.email);
+    if (localUser && localUser.userId === session.userId) {
+        currentUser = localUser;
+        // Sync from cloud in background
+        getCloudData(true).then(cloud => {
+            const cloudUser = cloud.users[session.userId];
+            if (cloudUser) {
+                currentUser = cloudUser;
+                saveSession(currentUser);
+                saveLocalBackup(cloudUser);
+                refreshUI();
+            }
+        }).catch(() => {});
+        return true;
+    }
+
+    // Fallback: fetch from cloud
+    try {
+        const cloud = await getCloudData(true);
+        const user = cloud.users[session.userId];
+        if (!user || user.email !== session.email) { clearSession(); return false; }
+        currentUser = user;
+        saveLocalBackup(user);
+        return true;
+    } catch(e) {
+        clearSession();
+        return false;
+    }
 }
 
 // ============================================================
@@ -1748,7 +1885,12 @@ function setAuthLoading(type, loading) {
     const btn  = document.getElementById(`${type}-btn`);
     const text = document.getElementById(`${type}-btn-text`);
     btn.disabled = loading;
-    text.innerHTML = loading ? '<span class="spinner"></span>' : (type==='login' ? 'SIGN IN' : 'CREATE ACCOUNT');
+    if (loading) {
+        text.innerHTML = '<span class="spinner" style="vertical-align:middle;margin-right:8px;"></span>' +
+            (type === 'login' ? 'Signing in...' : 'Creating account...');
+    } else {
+        text.innerHTML = type === 'login' ? 'SIGN IN' : 'CREATE ACCOUNT';
+    }
 }
 
 window.togglePwd = function(id) {
