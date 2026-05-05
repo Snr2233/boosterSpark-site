@@ -379,7 +379,10 @@
     <!-- Welcome banner -->
     <div class="mb-5 animate-fade-up">
         <div class="text-2xl font-display font-bold">Hey, <span id="welcome-name" class="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">Spark</span> 👋</div>
-        <div class="text-xs text-gray-500 mt-0.5">Ready to grow your socials?</div>
+        <div class="flex items-center gap-2 mt-1">
+            <div class="text-xs text-gray-500">Ready to grow your socials?</div>
+            <div class="text-[10px] font-mono bg-white/5 border border-white/10 px-2 py-0.5 rounded-full text-gray-500" id="welcome-userid"></div>
+        </div>
     </div>
 
     <!-- MAIN ORDER CARD -->
@@ -909,17 +912,14 @@ window.handleRegister = async function() {
     // ✅ ALWAYS save a local backup so login works even if JSONBin is slow
     saveLocalBackup(newUser);
 
-    if (!saved) {
-        // JSONBin failed — still let them in using local backup
-        showToast('Account created (offline mode). Login will still work!', 'info');
-    } else {
-        showToast(`Welcome, ${name.split(' ')[0]}! 🎉`, 'success');
-    }
-
+    // Set current user and session
     currentUser = newUser;
     saveSession(currentUser);
     setAuthLoading('register', false);
+
+    // Boot straight into the app
     bootApp();
+    showToast(`🎉 Welcome to Booster Spark, ${name.split(' ')[0]}!`, 'success');
 };
 
 // ============================================================
@@ -938,27 +938,27 @@ window.handleLogin = async function() {
     // ✅ STEP 1: Check local backup first — instant, no network needed
     const localUser = getLocalBackup(email);
     if (localUser && localUser.password === hashed) {
-        // Found locally — try to sync latest data from cloud in background
         currentUser = localUser;
         saveSession(currentUser);
 
-        // Fetch fresh cloud data in background to sync balance etc.
+        // Sync latest cloud data in background
         getCloudData(true).then(cloud => {
             const cloudUser = cloud.users[localUser.userId];
             if (cloudUser) {
                 currentUser = cloudUser;
                 saveSession(currentUser);
                 saveLocalBackup(cloudUser);
-                refreshUI(); // update balance if it changed
+                refreshUI();
             }
-        }).catch(() => {}); // silent fail — local data is enough
+        }).catch(() => {});
 
         setAuthLoading('login', false);
         bootApp();
+        showToast(`👋 Welcome back, ${localUser.name.split(' ')[0]}!`, 'success');
         return;
     }
 
-    // ✅ STEP 2: Not in local backup — fetch from JSONBin (new device / cleared storage)
+    // ✅ STEP 2: Not in local — fetch from JSONBin (new device or cleared storage)
     showToast('Looking up your account...', 'info');
     let cloud;
     try {
@@ -986,6 +986,7 @@ window.handleLogin = async function() {
     saveSession(currentUser);
     setAuthLoading('login', false);
     bootApp();
+    showToast(`👋 Welcome back, ${user.name.split(' ')[0]}!`, 'success');
 };
 
 // ============================================================
@@ -1040,28 +1041,44 @@ async function tryAutoLogin() {
 }
 
 // ============================================================
-// BOOT APP
+// BOOT APP — shows main app immediately, loads extras in background
 // ============================================================
 function bootApp() {
+    if (!currentUser) return;
+
+    // 1. Hide login, show app RIGHT AWAY
     document.getElementById('login-screen').classList.add('hidden');
     document.getElementById('main-app').classList.remove('hidden');
+
+    // 2. Update all UI with current user data
     refreshUI();
-    loadPricing();
-    updateReferralUI();
-    handleReferralParam();
+
+    // 3. Set up the order form
     selectPlatform('tiktok');
     document.getElementById('qty').value = 100;
     updatePrice();
+
+    // 4. Load extras in background — won't block the app
+    setTimeout(() => {
+        loadPricing().catch(() => {});
+        updateReferralUI().catch(() => {});
+    }, 500);
 }
 
 function refreshUI() {
     if (!currentUser) return;
-    const name = currentUser.name.split(' ')[0];
-    document.getElementById('welcome-name').textContent = name;
+    const firstName = currentUser.name.split(' ')[0];
+
+    // Welcome message + username display
+    document.getElementById('welcome-name').textContent = firstName;
+    document.getElementById('welcome-userid').textContent = currentUser.userId;
+
+    // Sidebar
     document.getElementById('sidebar-username').textContent = currentUser.name;
     document.getElementById('sidebar-email').textContent = currentUser.email;
-    document.getElementById('sidebar-avatar').textContent = name[0].toUpperCase();
+    document.getElementById('sidebar-avatar').textContent = firstName[0].toUpperCase();
     document.getElementById('sidebar-userid').textContent = `ID: ${currentUser.userId}`;
+
     refreshBalanceUI();
 }
 
